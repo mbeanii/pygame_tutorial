@@ -1,4 +1,3 @@
-# https://realpython.com/pygame-a-primer/  --- Collision Detection
 # Import the pygame module
 import pygame
 # Import random for random numbers
@@ -20,26 +19,30 @@ from pygame.locals import (
 # Define constants for the screen width and height
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
+BACKGROUND_COLOR = (135, 206, 250)  # sky blue
+PLAYER_SPEED = 10
+
 
 # Define a player object by extending pygame.sprite.Sprite
 # The surface drawn on the screen is now an attribute of 'player'
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super(Player, self).__init__()
-        self.surf = pygame.image.load("jet.png").convert()
+        self.surf = pygame.image.load("jet.png").convert_alpha()
+        self.surf = pygame.transform.scale(self.surf, (48, 48))
         self.surf.set_colorkey((255, 255, 255), RLEACCEL)
         self.rect = self.surf.get_rect()
 
     # Move the sprite based on user keypresses
     def update(self, pressed_keys):
         if pressed_keys[K_UP]:
-            self.rect.move_ip(0, -5)
+            self.rect.move_ip(0, -PLAYER_SPEED)
         if pressed_keys[K_DOWN]:
-            self.rect.move_ip(0, 5)
+            self.rect.move_ip(0, PLAYER_SPEED)
         if pressed_keys[K_LEFT]:
-            self.rect.move_ip(-5, 0)
+            self.rect.move_ip(-PLAYER_SPEED, 0)
         if pressed_keys[K_RIGHT]:
-            self.rect.move_ip(5, 0)
+            self.rect.move_ip(PLAYER_SPEED, 0)
 
         # Keep player on the screen
         if self.rect.left < 0:
@@ -57,7 +60,7 @@ class Player(pygame.sprite.Sprite):
 class Enemy(pygame.sprite.Sprite):
     def __init__(self):
         super(Enemy, self).__init__()
-        self.surf = pygame.image.load("missile.png").convert()
+        self.surf = pygame.image.load("missile.png").convert_alpha()
         self.surf.set_colorkey((255, 255, 255), RLEACCEL)
         self.rect = self.surf.get_rect(
             center=(
@@ -74,6 +77,44 @@ class Enemy(pygame.sprite.Sprite):
         if self.rect.right < 0:
             self.kill()
 
+
+# As above with player and enemy, define the cloud object by extending pygame.sprite.Sprite
+class Cloud(pygame.sprite.Sprite):
+    def __init__(self):
+        super(Cloud, self).__init__()
+        self.surf = pygame.image.load("cloud.png").convert_alpha()
+        self.surf = pygame.transform.scale(self.surf, (225, 150))
+        self.surf.set_colorkey((255, 255, 255), RLEACCEL)
+        self.rect = self.surf.get_rect(
+            center=(
+                random.randint(SCREEN_WIDTH + 20, SCREEN_WIDTH + 100),
+                random.randint(0, SCREEN_HEIGHT),
+            )
+        )
+        self.speed = 5
+
+    # Move the sprite based on speed
+    # Remove the sprite when it passes the left edge of the screen
+    def update(self):
+        self.rect.move_ip(-self.speed, 0)
+        if self.rect.right < 0:
+            self.kill()
+
+
+def init_clouds() -> pygame.sprite.Group:
+    cloud_group = pygame.sprite.Group()
+    for i in range(3):
+        cloud = Cloud()
+        cloud.rect = cloud.surf.get_rect(
+            center=(
+                random.randint(0, SCREEN_WIDTH),
+                random.randint(0, SCREEN_HEIGHT),
+            )
+        )
+        cloud_group.add(cloud)
+    return cloud_group
+
+
 # Initialize pygame
 pygame.init()
 
@@ -81,19 +122,38 @@ pygame.init()
 # The size is determined by the constant SCREEN_WIDTH and SCREEN_HEIGHT
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
+# Load and play background music
+# Sound source: http://ccmixter.org/files/Apoxode/59262
+# License: https://creativecommons.org/licenses/by/3.0/
+#pygame.mixer.music.load("Apoxode_-_Electric_1.mp3")
+#pygame.mixer.music.play(loops=-1)
+
+# Load all sound files
+# Sound sources: Jon Fincher
+#move_up_sound = pygame.mixer.Sound("Rising_putter.ogg")
+#move_down_sound = pygame.mixer.Sound("Falling_putter.ogg")
+#collision_sound = pygame.mixer.Sound("Collision.ogg")
+
 # Create a custom event for adding a new enemy
 ADDENEMY = pygame.USEREVENT + 1
+ADDCLOUD = pygame.USEREVENT + 2
 pygame.time.set_timer(ADDENEMY, 250)
+pygame.time.set_timer(ADDCLOUD, 2000)
 
-# Instantiate player. Right now, this is just a rectangle.
+# Instantiate player
 player = Player()
 
 # Create groups to hold enemy sprites and all sprites
 # - enemies is used for collision detection and position updates
 # - all_sprites is used for rendering
 enemies = pygame.sprite.Group()
-all_sprites = pygame.sprite.Group()
+# Start with some clouds already on the screen
+clouds = init_clouds()
+all_sprites = clouds.copy()
 all_sprites.add(player)
+
+# Setup the clock for a decent framerate
+clock = pygame.time.Clock()
 
 # Variable to keep the main loop running
 running = True
@@ -116,15 +176,22 @@ while running:
             new_enemy = Enemy()
             enemies.add(new_enemy)
             all_sprites.add(new_enemy)
+        elif event.type == ADDCLOUD:
+            # Create the new enemy and add it to sprite groups
+            new_cloud = Cloud()
+            clouds.add(new_cloud)
+            all_sprites.add(new_cloud)
+
     # Get the set of keys pressed and check for user input
     pressed_keys = pygame.key.get_pressed()
 
     # Update the player sprite based on user keypresses
     player.update(pressed_keys)
+    clouds.update()
     enemies.update()
 
-    # Fill the screen with black
-    screen.fill((0, 0, 0))
+    # Fill the background
+    screen.fill(BACKGROUND_COLOR)
 
     # Draw all sprites
     for entity in all_sprites:
@@ -138,3 +205,6 @@ while running:
 
     # Update the display
     pygame.display.flip()
+
+    # Ensure program maintains a rate of 30 frames per second
+    clock.tick(30)
